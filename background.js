@@ -6,6 +6,11 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === 'success') {
         console.log("success");
-        console.log(request.reader);
+        console.log(request.data);
+    }
+
+    if (request.type === 'fail') {
+        console.log("fail");
+        console.log(request.error);
     }
 });
