@@ -1,7 +1,7 @@
 const uploadButton = document.getElementById('uploadButton');
 const resumeInput = document.getElementById('resumeInput');
 const autofillButton = document.getElementById('autofillButton'); 
-const API_KEY = "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";
+const API_KEY = "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";
 
 async function getPdfText(data) {
   let doc = await pdfjsLib.getDocument({data}).promise;
@@ -17,19 +17,19 @@ const systemMessage = { //  Explain things like you're talking to a software pro
 
 function autofillForm() {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      chrome.tabs.sendMessage(
-        tabs[0].id,
-        { type: 'fillForm' },
-        (response) => {
-            if (typeof response === 'undefined') {
-                console.log('Response is undefined');
-                return;
-              }
-          if (response.success) {
-            console.log('Form autofilled successfully');
-          }
-        }
-      );
+      // chrome.tabs.sendMessage(
+      //   tabs[0].id,
+      //   { type: 'fillForm' },
+      //   (response) => {
+      //       if (typeof response === 'undefined') {
+      //           console.log('Response is undefined');
+      //           return;
+      //         }
+      //     if (response.success) {
+      //       console.log('Form autofilled successfully');
+      //     }
+      //   }
+      // );
     });
   }
 
@@ -66,7 +66,15 @@ uploadButton.addEventListener('click', () => {
     getPdfText(data).then((data) => {
       console.log(data);
       // chrome.runtime.sendMessage({type: "success", data});
-      handleSend(data);
+      handleSend(data).then((data) => {
+        console.log( data );
+        console.log("sucess" + data.choices[0].message.content);
+        //chrome.runtime.sendMessage({type: "success", data});
+      }).catch((error) => {
+        console.log("error" + error);
+
+        //chrome.runtime.sendMessage({type: "fail", error});
+      });
     }).catch((error) => {
       console.log(error);
       //chrome.runtime.sendMessage({type: "fail", error});
@@ -89,7 +97,7 @@ const handleSend = async (message) => {
   
   // Initial system message to determine ChatGPT functionality
   // How it responds, how it talks, etc.
-  await processMessageToChatGPT(newMessage);
+  return await processMessageToChatGPT(newMessage);
 };
 
 async function processMessageToChatGPT(chatMessages) { // messages is an array of messages
@@ -117,8 +125,8 @@ async function processMessageToChatGPT(chatMessages) { // messages is an array o
       apiMessages // The messages from our chat with ChatGPT
     ]
   }
-
-  await fetch("https://api.openai.com/v1/chat/completions", 
+  console.log(JSON.stringify(apiRequestBody));
+  return await fetch("https://api.openai.com/v1/chat/completions", 
   {
     method: "POST",
     headers: {
@@ -128,14 +136,15 @@ async function processMessageToChatGPT(chatMessages) { // messages is an array o
     body: JSON.stringify(apiRequestBody)
   }).then((data) => {
     return data.json();
-  }).then((data) => {
-    chrome.runtime.sendMessage({type: "success", data});
-    setMessages([...chatMessages, {
-      message: data.choices[0].message.content,
-      sender: "ChatGPT"
-    }]);
-    setIsTyping(false);
-  });
+  })
+  // .then((data) => {
+  //   // chrome.runtime.sendMessage({type: "success", data});
+  //   // setMessages([...chatMessages, {
+  //   //   message: data.choices[0].message.content,
+  //   //   sender: "ChatGPT"
+  //   // }]);
+  //   // setIsTyping(false);
+  // });
 }
 autofillButton.addEventListener('click', () => {
   autofillForm();
