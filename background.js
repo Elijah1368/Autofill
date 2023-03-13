@@ -8,9 +8,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log("success");
         console.log(request.data);
     }
-
+    let requestErr = request.error;
     if (request.type === 'fail') {
         console.log("fail");
-        console.log(request.error);
+        console.error(requestErr, requestErr.stack);
     }
 });

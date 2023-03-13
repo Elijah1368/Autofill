@@ -3,10 +3,14 @@ const resumeInput = document.getElementById('resumeInput');
 const autofillButton = document.getElementById('autofillButton'); 
 const API_KEY = "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";
 
-var pdfjsLib = window['pdfjs-dist/build/pdf'];
-pdfjsLib.GlobalWorkerOptions.workerSrc = '//mozilla.github.io/pdf.js/build/pdf.worker.js';
+async function getPdfText(data) {
+  let doc = await pdfjsLib.getDocument({data}).promise;
+  let pageTexts = Array.from({length: doc.numPages}, async (v,i) => {
+      return (await (await doc.getPage(i+1)).getTextContent()).items.map(token => token.str).join('');
+  });
+  return (await Promise.all(pageTexts)).join('');
+}
 
-// "Explain things like you would to a 10 year old learning how to code."
 const systemMessage = { //  Explain things like you're talking to a software professional with 5 years of experience.
   "role": "system", "content": "Given the input fields and resume data, please fill out the fields using the data from the resume."
 }
@@ -37,10 +41,14 @@ const getInputFields = () => {
 async function readFileAsText(file) {
   const doc = await pdfjs.getDocument(src).promise // note the use of the property promise
   const page = await doc.getPage(1);
-  const textContent = await page.getTextContent();
-  return textContent.items.map((item) => item.str);
+  return await page.getTextContent();
 }
 
+async function getItems(src) {
+  const content = await getContent(src);
+  const items = content.items.map((item) => item.str);
+  return items;
+}
 
 //save resume data to local storage
 function saveData(data) {
@@ -51,14 +59,22 @@ function saveData(data) {
 uploadButton.addEventListener('click', () => {
 
   const file = resumeInput.files[0];
-  const reader = new FileReader();
+  const fileReader = new FileReader();
 
-  readFileAsText(file).then((data) => {
-    chrome.runtime.sendMessage({type: "success", data});
-    handleSend(data);
-  }).catch((error) => {
-    chrome.runtime.sendMessage({type: "fail", error});
-  });
+  fileReader.onload = (event) => {
+    const data = new Uint8Array(event.target.result);
+    getPdfText(data).then((data) => {
+      console.log(data);
+      // chrome.runtime.sendMessage({type: "success", data});
+      handleSend(data);
+    }).catch((error) => {
+      console.log(error);
+      //chrome.runtime.sendMessage({type: "fail", error});
+    });
+  };
+
+  fileReader.readAsArrayBuffer(file);
+
 
 });
 
