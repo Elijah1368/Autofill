@@ -1,4 +1,23 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === 'parseInputIDs') {
+    chrome.runtime.sendMessage({type: 'success', data: "Im receiving it"});
+      // Find all input elements on the current page
+   
+      const inputElements = document.getElementsByTagName('input');
+      const inputIDs = [];
+
+      // Loop through each input element and add its ID to the inputIDs array
+      for (let i = 0; i < inputElements.length; i++) {
+        if (inputElements[i].id) {
+          inputIDs.push(inputElements[i].id);
+        }
+      }
+
+      // Send a message to the background script with the inputIDs array
+      chrome.runtime.sendMessage({type: 'saveInputIDs', data: inputIDs});
+    };
+  
+  
     if (request.type === 'fillForm') {
       chrome.storage.local.get(['resumeData'], (result) => {
         const data = result.resumeData;

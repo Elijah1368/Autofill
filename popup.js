@@ -2,6 +2,9 @@ const uploadButton = document.getElementById('uploadButton');
 const resumeInput = document.getElementById('resumeInput');
 const autofillButton = document.getElementById('autofillButton'); 
 const API_KEY = "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";
+const systemMessage = { //  Explain things like you're talking to a software professional with 5 years of experience.
+  "role": "system", "content": "Given the input fields and resume data, please fill out the fields using the data from the resume."
+}
 
 async function getPdfText(data) {
   let doc = await pdfjsLib.getDocument({data}).promise;
@@ -9,10 +12,6 @@ async function getPdfText(data) {
       return (await (await doc.getPage(i+1)).getTextContent()).items.map(token => token.str).join('');
   });
   return (await Promise.all(pageTexts)).join('');
-}
-
-const systemMessage = { //  Explain things like you're talking to a software professional with 5 years of experience.
-  "role": "system", "content": "Given the input fields and resume data, please fill out the fields using the data from the resume."
 }
 
 function autofillForm() {
@@ -50,10 +49,26 @@ async function getItems(src) {
   return items;
 }
 
-//save resume data to local storage
-function saveData(data) {
-  chrome.storage.local.set({ resumeData: data });
-}
+autofillButton.addEventListener('click', () => {
+  //send message to content.js to parse input fields
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    chrome.tabs.sendMessage(
+      tabs[0].id,
+      { type: 'parseInputIDs' },
+      (response) => {
+        if (typeof response === 'undefined') {
+          // send message to background.js failed
+          chrome.runtime.sendMessage({type: "fail", error: response})
+          return;
+        }
+
+        if (response.success) {
+          chrome.runtime.sendMessage({type: "success", data: response})
+        }
+      }
+    );
+  });
+});
 
 //upload resume
 uploadButton.addEventListener('click', () => {
@@ -62,39 +77,27 @@ uploadButton.addEventListener('click', () => {
   const fileReader = new FileReader();
 
   fileReader.onload = (event) => {
-    const data = new Uint8Array(event.target.result);
-    getPdfText(data).then((data) => {
-      console.log(data);
-      // chrome.runtime.sendMessage({type: "success", data});
-      handleSend(data).then((data) => {
-        console.log( data );
-        console.log("sucess" + data.choices[0].message.content);
-        //chrome.runtime.sendMessage({type: "success", data});
-      }).catch((error) => {
-        console.log("error" + error);
-
-        //chrome.runtime.sendMessage({type: "fail", error});
+    const fileData = new Uint8Array(event.target.result);
+    getPdfText(fileData).then((userData) => {
+      chrome.runtime.sendMessage({type: "saveData", userData});
+      handleSend(userData).then(( chatGPTResponse ) => {
+        chrome.runtime.sendMessage({type: "sucess", data: chatGPTResponse.choices[0].message.content});
+        console.log("sucess" + chatGPTResponse.choices[0].message.content);
       });
     }).catch((error) => {
-      console.log(error);
-      //chrome.runtime.sendMessage({type: "fail", error});
+        chrome.runtime.sendMessage({type: "fail", error});
     });
   };
 
   fileReader.readAsArrayBuffer(file);
-
-
 });
 
 const handleSend = async (message) => {
-  
   const newMessage = {
     message,
     direction: 'outgoing',
     sender: "user"
   };
-
-  
   // Initial system message to determine ChatGPT functionality
   // How it responds, how it talks, etc.
   return await processMessageToChatGPT(newMessage);
@@ -137,34 +140,8 @@ async function processMessageToChatGPT(chatMessages) { // messages is an array o
   }).then((data) => {
     return data.json();
   })
-  // .then((data) => {
-  //   // chrome.runtime.sendMessage({type: "success", data});
-  //   // setMessages([...chatMessages, {
-  //   //   message: data.choices[0].message.content,
-  //   //   sender: "ChatGPT"
-  //   // }]);
-  //   // setIsTyping(false);
-  // });
 }
+
 autofillButton.addEventListener('click', () => {
   autofillForm();
 });
-
-  
-function saveData(data) {
-    chrome.storage.local.set({ resumeData: data });
-}
-
-function parseResume(data) {
-    const nameRegex = /(\b[A-Z][a-z]+)\s+(\b[A-Z][a-z]+)/;
-    const match = nameRegex.exec(data);
-  
-    if (match) {
-      return {
-        firstName: match[1],
-        lastName: match[2]
-      };
-    } else {
-      return null;
-    }
-} 
