@@ -1,6 +1,5 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'parseInputIDs') {
-    chrome.runtime.sendMessage({type: 'success', data: "Im receiving it"});
       // Find all input elements on the current page
    
       const inputElements = document.getElementsByTagName('input');
@@ -14,7 +13,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
 
       // Send a message to the background script with the inputIDs array
-      chrome.runtime.sendMessage({type: 'saveInputIDs', data: inputIDs});
+      chrome.runtime.sendMessage({type: 'saveInputIDs', data: inputIDs}, (data) => { sendResponse(data) });
+
     };
   
   

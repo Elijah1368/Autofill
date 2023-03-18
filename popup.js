@@ -1,9 +1,9 @@
 const uploadButton = document.getElementById('uploadButton');
 const resumeInput = document.getElementById('resumeInput');
 const autofillButton = document.getElementById('autofillButton'); 
-const API_KEY = "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";
+const API_KEY = "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";
 const systemMessage = { //  Explain things like you're talking to a software professional with 5 years of experience.
-  "role": "system", "content": "Given the input fields and resume data, please fill out the fields using the data from the resume."
+  "role": "system", "content": "Given the input field IDs and resume data, please fill out the fields using the data from the resume. Return your answer as a JSON object with the keys being the input field IDs and the values being the values to fill in the input fields. For example, if the input field ID is 'firstName' and the value to fill in is 'John', then the JSON object should be { 'firstName': 'John' }"
 }
 
 async function getPdfText(data) {
@@ -14,26 +14,23 @@ async function getPdfText(data) {
   return (await Promise.all(pageTexts)).join('');
 }
 
-function autofillForm() {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      // chrome.tabs.sendMessage(
-      //   tabs[0].id,
-      //   { type: 'fillForm' },
-      //   (response) => {
-      //       if (typeof response === 'undefined') {
-      //           console.log('Response is undefined');
-      //           return;
-      //         }
-      //     if (response.success) {
-      //       console.log('Form autofilled successfully');
-      //     }
-      //   }
-      // );
-    });
-  }
+async function autofillForm() {
+  chrome.runtime.sendMessage({type: "fetchApi"}, (userData, inputFields) => {
+        handleSend(userData, inputFields);
+  }).catch((error) => {
+    chrome.runtime.sendMessage({type: "fail", error: "failed to get input fields api " + error})
+  });
+};
 
-const getInputFields = () => {
-  return "first name, Last name, Email, Address, Work experience";
+async function getInputFields() {
+    chrome.runtime.sendMessage(
+      {type: "getInputFields"},
+      (inputFields) => {
+          chrome.runtime.sendMessage({type: "success", data: "testing this baatchh" + inputFields})
+
+        return inputFields;
+      }
+    );
 }
 
 //using PDF.js to parse pdf file into a string
@@ -49,25 +46,27 @@ async function getItems(src) {
   return items;
 }
 
+/*
+TODO: check if page changed from last time or if user data changed last time, if not then no need to parse data or no need to send chat gpt
+*/
 autofillButton.addEventListener('click', () => {
   //send message to content.js to parse input fields
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     chrome.tabs.sendMessage(
       tabs[0].id,
       { type: 'parseInputIDs' },
-      (response) => {
-        if (typeof response === 'undefined') {
+      (inputIDs) => {
+        if (typeof inputIDs === 'undefined') {
           // send message to background.js failed
-          chrome.runtime.sendMessage({type: "fail", error: response})
+          chrome.runtime.sendMessage({type: "fail", error: "failed to parse input IDs " + inputIDs})
           return;
         }
-
-        if (response.success) {
-          chrome.runtime.sendMessage({type: "success", data: response})
-        }
+        
+        autofillForm();
       }
     );
   });
+
 });
 
 //upload resume
@@ -80,30 +79,28 @@ uploadButton.addEventListener('click', () => {
     const fileData = new Uint8Array(event.target.result);
     getPdfText(fileData).then((userData) => {
       chrome.runtime.sendMessage({type: "saveData", userData});
-      handleSend(userData).then(( chatGPTResponse ) => {
-        chrome.runtime.sendMessage({type: "sucess", data: chatGPTResponse.choices[0].message.content});
-        console.log("sucess" + chatGPTResponse.choices[0].message.content);
-      });
     }).catch((error) => {
-        chrome.runtime.sendMessage({type: "fail", error});
+        chrome.runtime.sendMessage({type: "fail", error: "failed to upload file " + error});
     });
   };
 
   fileReader.readAsArrayBuffer(file);
 });
 
-const handleSend = async (message) => {
+const handleSend = async (message, inputFields) => {
   const newMessage = {
     message,
     direction: 'outgoing',
     sender: "user"
   };
+
+  chrome.runtime.sendMessage({type: "success", data: "did you even hit handle send"})
   // Initial system message to determine ChatGPT functionality
   // How it responds, how it talks, etc.
-  return await processMessageToChatGPT(newMessage);
+  return await processMessageToChatGPT(newMessage, inputFields);
 };
 
-async function processMessageToChatGPT(chatMessages) { // messages is an array of messages
+async function processMessageToChatGPT(chatMessages, inputFields) { // messages is an array of messages
   // Format messages for chatGPT API
   // API is expecting objects in format of { role: "user" or "assistant", "content": "message here"}
   // So we need to reformat
@@ -116,7 +113,7 @@ async function processMessageToChatGPT(chatMessages) { // messages is an array o
     role = "user";
   }
 
-  let apiMessages = { role: role, content: "Input: " + getInputFields() + "\n" + "Resume Data:" + chatMessages.message}
+  let apiMessages = { role: role, content: "Input: " + inputFields + "\n" + "Resume Data:" + chatMessages.message}
 
   // Get the request body set up with the model we plan to use
   // and the messages which we formatted above. We add a system message in the front to'
@@ -138,10 +135,9 @@ async function processMessageToChatGPT(chatMessages) { // messages is an array o
     },
     body: JSON.stringify(apiRequestBody)
   }).then((data) => {
-    return data.json();
-  })
+    chrome.runtime.sendMessage({type: "success", data: "wtf is this " + data})
+    return { data };
+  }).catch((error) => {
+    chrome.runtime.sendMessage({type: "fail", error: "failed to call openAI api " + error});
+  });
 }
-
-autofillButton.addEventListener('click', () => {
-  autofillForm();
-});
