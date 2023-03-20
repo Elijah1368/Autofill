@@ -1,10 +1,6 @@
 const uploadButton = document.getElementById('uploadButton');
 const resumeInput = document.getElementById('resumeInput');
 const autofillButton = document.getElementById('autofillButton'); 
-const API_KEY = "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";
-const systemMessage = { //  Explain things like you're talking to a software professional with 5 years of experience.
-  "role": "system", "content": "Given the input field IDs and resume data, please fill out the fields using the data from the resume. Return your answer as a JSON object with the keys being the input field IDs and the values being the values to fill in the input fields. For example, if the input field ID is 'firstName' and the value to fill in is 'John', then the JSON object should be { 'firstName': 'John' }"
-}
 
 async function getPdfText(data) {
   let doc = await pdfjsLib.getDocument({data}).promise;
@@ -14,21 +10,34 @@ async function getPdfText(data) {
   return (await Promise.all(pageTexts)).join('');
 }
 
-async function autofillForm() {
-  chrome.runtime.sendMessage({type: "fetchApi"}, (userData, inputFields) => {
-        handleSend(userData, inputFields);
-  }).catch((error) => {
-    chrome.runtime.sendMessage({type: "fail", error: "failed to get input fields api " + error})
+async function autofillForm(tabId) {
+  // var inputFields = await getInputFields();
+  // var userData = await getSavedData();
+  // var data = await handleSend(userData, inputFields);
+  // chrome.runtime.sendMessage({type: "success api call", data});
+  chrome.runtime.sendMessage({
+    type: "fetchAPI"
+  },
+  (data) => {
+    chrome.runtime.sendMessage({type: "fillInForm", data, tabId})
   });
 };
 
-async function getInputFields() {
-    chrome.runtime.sendMessage(
-      {type: "getInputFields"},
-      (inputFields) => {
-          chrome.runtime.sendMessage({type: "success", data: "testing this baatchh" + inputFields})
+async function getSavedData() {
+  return await chrome.runtime.sendMessage(
+    {type: "getSavedData"},
+    (userData) => {
+      return userData;
+    }
+  );
+}
 
-        return inputFields;
+async function getInputFields() {
+  return await chrome.runtime.sendMessage(
+      {type: "getInputFields"},
+      (data) => {
+        chrome.runtime.sendMessage({type: "success input fields", data})
+        return data.inputIDs;
       }
     );
 }
@@ -62,7 +71,7 @@ autofillButton.addEventListener('click', () => {
           return;
         }
         
-        autofillForm();
+        autofillForm(tabs[0].id);
       }
     );
   });
@@ -77,8 +86,8 @@ uploadButton.addEventListener('click', () => {
 
   fileReader.onload = (event) => {
     const fileData = new Uint8Array(event.target.result);
-    getPdfText(fileData).then((userData) => {
-      chrome.runtime.sendMessage({type: "saveData", userData});
+    getPdfText(fileData).then((data) => {
+      chrome.runtime.sendMessage({type: "saveData", data});
     }).catch((error) => {
         chrome.runtime.sendMessage({type: "fail", error: "failed to upload file " + error});
     });
@@ -86,58 +95,3 @@ uploadButton.addEventListener('click', () => {
 
   fileReader.readAsArrayBuffer(file);
 });
-
-const handleSend = async (message, inputFields) => {
-  const newMessage = {
-    message,
-    direction: 'outgoing',
-    sender: "user"
-  };
-
-  chrome.runtime.sendMessage({type: "success", data: "did you even hit handle send"})
-  // Initial system message to determine ChatGPT functionality
-  // How it responds, how it talks, etc.
-  return await processMessageToChatGPT(newMessage, inputFields);
-};
-
-async function processMessageToChatGPT(chatMessages, inputFields) { // messages is an array of messages
-  // Format messages for chatGPT API
-  // API is expecting objects in format of { role: "user" or "assistant", "content": "message here"}
-  // So we need to reformat
- 
-  let role = "";
-
-  if (chatMessages.sender === "ChatGPT") {
-    role = "assistant";
-  } else {
-    role = "user";
-  }
-
-  let apiMessages = { role: role, content: "Input: " + inputFields + "\n" + "Resume Data:" + chatMessages.message}
-
-  // Get the request body set up with the model we plan to use
-  // and the messages which we formatted above. We add a system message in the front to'
-  // determine how we want chatGPT to act. 
-  const apiRequestBody = {
-    "model": "gpt-3.5-turbo",
-    "messages": [
-      systemMessage,  // The system message DEFINES the logic of our chatGPT
-      apiMessages // The messages from our chat with ChatGPT
-    ]
-  }
-  console.log(JSON.stringify(apiRequestBody));
-  return await fetch("https://api.openai.com/v1/chat/completions", 
-  {
-    method: "POST",
-    headers: {
-      "Authorization": "Bearer " + API_KEY,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(apiRequestBody)
-  }).then((data) => {
-    chrome.runtime.sendMessage({type: "success", data: "wtf is this " + data})
-    return { data };
-  }).catch((error) => {
-    chrome.runtime.sendMessage({type: "fail", error: "failed to call openAI api " + error});
-  });
-}
